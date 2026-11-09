@@ -1,0 +1,12 @@
+node_modules/
+*.sqlite*
+.DS_Store
+test-results/
+dist/
+release/
+.local/
+.mcp.json
+.env
+.env.*
+screenshots/
+*.log

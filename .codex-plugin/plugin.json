@@ -1,0 +1,22 @@
+{
+  "name": "local-notepad",
+  "version": "0.3.0",
+  "description": "本地记事本：记录、搜索、编辑和整理笔记，支持自动保存与回收站。",
+  "author": { "name": "Drok1015" },
+  "license": "MIT",
+  "homepage": "https://github.com/Drok1015/codex-notepad",
+  "repository": "https://github.com/Drok1015/codex-notepad",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "记事本",
+    "shortDescription": "随手记录，保存在本机",
+    "longDescription": "本地记事本，支持卡片画廊、点击卡片复制完整正文、Markdown 编辑与预览、搜索、置顶、自动保存及回收站恢复。可从侧边栏或聊天侧面板打开，也可通过聊天管理笔记。",
+    "developerName": "Drok1015",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "brandColor": "#517568",
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": ["打开记事本", "把这段内容保存到记事本", "搜索我的笔记"]
+  }
+}
