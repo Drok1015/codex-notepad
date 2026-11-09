@@ -8,10 +8,10 @@ import { noteTools } from './tools.mjs';
 
 const icon = readFileSync(new URL('../assets/icon.svg', import.meta.url), 'utf8');
 const icons = [{ src: `data:image/svg+xml;base64,${Buffer.from(icon).toString('base64')}`, mimeType: 'image/svg+xml', sizes: ['any'] }];
-const server = new McpServer({ name: '记事本', version: '0.3.0', icons });
+const server = new McpServer({ name: '记事本', version: '0.4.0', icons });
 new OpenAIExtensions(server);
 const store = new NoteStore();
-const uri = 'ui://local-notepad/v2';
+const uri = 'ui://local-notepad/v3';
 registerAppResource(server, '记事本', uri, {}, async () => ({ contents: [{
   uri, mimeType: RESOURCE_MIME_TYPE,
   text: readFileSync(new URL('./app.html', import.meta.url), 'utf8'),

@@ -8,6 +8,15 @@
     <button class="new-note" id="new-note"><span aria-hidden="true">＋</span> 新建笔记 <kbd>⌘ N</kbd></button>
     <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索标题或内容" aria-label="搜索笔记" maxlength="500"><kbd>⌘ K</kbd></label>
     <nav class="filters" aria-label="笔记分类"><button id="active-filter" class="active" aria-pressed="true">全部笔记</button><button id="trash-filter" aria-pressed="false">回收站</button></nav>
+    <section class="folder-section" aria-label="文件夹">
+      <div class="folder-heading"><span>文件夹</span><button id="new-folder" aria-expanded="false" aria-controls="folder-form" title="新建文件夹">＋ 新建</button></div>
+      <form id="folder-form" class="folder-form" hidden>
+        <label class="sr-only" for="folder-name">文件夹名称</label><input id="folder-name" placeholder="文件夹名称" maxlength="80" required autocomplete="off">
+        <div><button type="submit" id="create-folder">创建</button><button type="button" id="cancel-folder">取消</button></div>
+        <p id="folder-error" role="alert" hidden></p>
+      </form>
+      <nav id="folder-list" class="folder-list" aria-label="按文件夹筛选"></nav>
+    </section>
     <div class="list-heading"><span id="list-heading">我的笔记</span><span id="note-count">0</span></div>
     <div id="note-list" class="note-list" role="list" aria-label="笔记列表"></div>
     <footer class="sidebar-footer"><span class="dot"></span> 保存在这台电脑上 <button id="refresh" title="重新加载列表" aria-label="重新加载列表">↻</button></footer>
@@ -16,13 +25,13 @@
     <header class="toolbar"><div class="breadcrumb">我的空间 <span>/</span> <span id="current-label">卡片画廊</span></div><div class="toolbar-actions"><button id="gallery-toggle" aria-pressed="true">▦ 卡片画廊</button><button id="preview-toggle" hidden aria-pressed="false">预览</button><button id="export-note" hidden>导出</button><button id="pin-note" hidden aria-pressed="false">置顶</button><button id="trash-note" hidden class="danger">移入回收站</button><button id="restore-note" hidden>恢复笔记</button></div></header>
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-message"></span><div><button id="save-copy">另存为新笔记</button><button id="reload-note">重新加载</button><button id="retry-save">重试保存</button></div></div>
     <section id="gallery" class="gallery" aria-label="笔记卡片画廊">
-      <header class="gallery-heading"><div><p class="eyebrow">YOUR NOTES, WITHIN REACH</p><h1>卡片画廊<span id="gallery-count">0</span></h1><p>点击卡片，复制完整笔记正文。</p></div><span class="gallery-hint">一键复制 · 随时取用</span></header>
+      <header class="gallery-heading"><div><p class="eyebrow">YOUR NOTES, WITHIN REACH</p><h1><span id="gallery-title">卡片画廊</span><span id="gallery-count">0</span></h1><p>点击卡片，复制完整笔记正文。</p></div><span class="gallery-hint">一键复制 · 随时取用</span></header>
       <div id="gallery-grid" class="gallery-grid"></div>
       <div id="gallery-empty" class="gallery-empty"><span aria-hidden="true">▤</span><h2 id="gallery-empty-title">把常用的内容，放在手边。</h2><p id="gallery-empty-text">新建一篇笔记，就会在这里生成卡片。</p><button id="gallery-create" class="primary">＋ 新建笔记</button></div>
     </section>
     <section id="empty" class="empty"><div class="empty-art" aria-hidden="true"><svg width="100" height="115" viewBox="0 0 100 115" fill="none"><rect x="19" y="11" width="66" height="90" rx="8" transform="rotate(7 19 11)" fill="currentColor" opacity=".10"/><rect x="13" y="6" width="66" height="90" rx="8" fill="var(--paper)" stroke="currentColor" stroke-width="1.5"/><path d="M31 32h31M31 44h31M31 56h19M23 6v90" stroke="currentColor" stroke-width="1.5" opacity=".4"/><path d="m65 79 20-20 7 7-20 20-10 3 3-10Z" fill="var(--paper)" stroke="currentColor" stroke-width="1.5"/></svg></div><p class="eyebrow">A LITTLE SPACE FOR YOUR THOUGHTS</p><h1>想到了，就记下来。</h1><p id="empty-description">一个想法、一段灵感，或今天的小事。<br>在这里，给它们一个安静的位置。</p><button id="empty-create" class="primary">写下第一篇笔记 <span aria-hidden="true">↗</span></button><small>支持 Markdown · 自动保存 · 本地存储</small></section>
     <section id="editor" class="editor" hidden>
-      <div class="note-meta"><span class="note-type">✎ 笔记</span><span id="note-date"></span></div>
+      <div class="note-meta"><span class="note-type">✎ 笔记</span><span id="note-date"></span><label class="editor-folder">文件夹 <select id="note-folder" aria-label="笔记所属文件夹"></select></label></div>
       <label class="sr-only" for="note-title">笔记标题</label><input id="note-title" class="title-input" placeholder="无标题笔记" maxlength="500" autocomplete="off">
       <div class="editor-rule"></div>
       <label class="sr-only" for="note-content">笔记正文</label><textarea id="note-content" placeholder="从这里开始记录…&#10;&#10;支持 Markdown，按 ⌘ S 立即保存。" maxlength="2000000" spellcheck="false"></textarea>

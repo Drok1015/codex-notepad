@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoteStore } from '../server/store.mjs';
 import { noteTools } from '../server/tools.mjs';
+import { DatabaseSync } from 'node:sqlite';
 
 test('笔记持久化、搜索、置顶和回收站恢复', () => {
   const dir = mkdtempSync(join(tmpdir(), 'notepad-store-'));
@@ -69,5 +70,60 @@ test('复制完整正文，不包含标题；回收站笔记不可复制', async
     store.update({ id: note.id, version: 1, deleted: true });
     await assert.rejects(tools.copy_note.run({ id: note.id }), /回收站/);
     assert.equal(copied.length, 1);
+  } finally { store.close(); }
+});
+
+test('旧数据库自动迁移，保留原笔记全部数据并归入未分类', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'notepad-migration-')); let store;
+  try {
+    const file = join(dir, 'notes.sqlite');
+    const old = new DatabaseSync(file);
+    old.exec(`CREATE TABLE notes (id TEXT PRIMARY KEY,title TEXT NOT NULL,content TEXT NOT NULL,
+      pinned INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+      deleted_at TEXT,version INTEGER NOT NULL DEFAULT 1)`);
+    old.prepare('INSERT INTO notes VALUES(?,?,?,?,?,?,?,?)').run('legacy', '原笔记', '中文\nMarkdown **内容**', 1, '2026-01-01', '2026-02-01', null, 7);
+    const before = old.prepare('SELECT * FROM notes').get(); old.close();
+    store = new NoteStore(file);
+    assert.equal(store.get('legacy').folderId, null);
+    const after = store.db.prepare('SELECT * FROM notes').get();
+    delete after.folder_id; assert.deepEqual(after, before);
+    assert.equal(store.list({ folderId: null }).length, 1);
+    store.close(); store = new NoteStore(file);
+    assert.equal(store.get('legacy').version, 7);
+    assert.equal(store.listFolders().unfiledCount, 1);
+  } finally { store?.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('文件夹分类、未分类、数量统计、移动与回收站恢复', () => {
+  const store = new NoteStore(':memory:');
+  try {
+    const work = store.createFolder({ name: '  工作  ' });
+    const ideas = store.createFolder({ name: '灵感' });
+    assert.equal(work.name, '工作');
+    assert.throws(() => store.createFolder({ name: '工作' }), error => error.code === 'DUPLICATE_FOLDER');
+    assert.throws(() => store.createFolder({ name: '   ' }), /名称/);
+    assert.throws(() => store.createFolder({ name: '未分类' }), /默认分类/);
+    const a = store.create({ title: '周报', content: '正文', folderId: work.id });
+    const b = store.create({ title: '未分类笔记' });
+    assert.equal(store.list().length, 2);
+    assert.deepEqual(store.list({ folderId: work.id }).map(n => n.id), [a.id]);
+    assert.equal(store.list({ folderId: work.id, query: '找不到' }).length, 0);
+    assert.equal(store.list({ folderId: null })[0].id, b.id);
+    assert.equal(store.listFolders().folders.find(f => f.id === work.id).noteCount, 1);
+    assert.throws(() => store.update({ id: a.id, version: 1, folderId: 'missing' }), error => error.code === 'FOLDER_NOT_FOUND');
+    assert.equal(store.get(a.id).version, 1);
+    const moved = store.update({ id: a.id, version: 1, folderId: ideas.id });
+    assert.equal(moved.content, '正文');
+    assert.throws(() => store.update({ id: a.id, version: 1, folderId: null }), error => error.code === 'CONFLICT');
+    const deleted = store.update({ id: a.id, version: moved.version, deleted: true });
+    assert.equal(store.listFolders().folders.find(f => f.id === ideas.id).noteCount, 0);
+    assert.equal(store.listFolders().trashCount, 1);
+    assert.equal(store.list({ trash: true })[0].folderId, ideas.id);
+    const restored = store.update({ id: a.id, version: deleted.version, deleted: false });
+    assert.equal(restored.folderId, ideas.id);
+    const unfiled = store.update({ id: a.id, version: restored.version, folderId: null });
+    assert.equal(unfiled.folderId, null);
+    assert.equal(store.listFolders().unfiledCount, 2);
+    assert.equal(store.listFolders().totalCount, 2);
   } finally { store.close(); }
 });

@@ -15,7 +15,7 @@ try {
   const info = client.getServerVersion();
   const { tools } = await client.listTools();
   const open = tools.find(tool => tool.name === 'open_notepad');
-  for (const name of ['list_notes', 'get_note', 'create_note', 'update_note', 'trash_note', 'restore_note', 'copy_note']) {
+  for (const name of ['list_notes', 'get_note', 'create_note', 'update_note', 'trash_note', 'restore_note', 'copy_note', 'list_folders', 'create_folder']) {
     if (!tools.some(tool => tool.name === name)) throw new Error(`缺少工具：${name}`);
   }
   const entries = open?._meta?.['openai/ui']?.entrypoints || [];
@@ -23,6 +23,7 @@ try {
   if (!info.icons?.length || info.version !== installed.version) throw new Error('图标缺失或安装版本不匹配');
   const result = await client.readResource({ uri: open._meta.ui.resourceUri });
   if (!result.contents.some(c => c.text?.includes('gallery-grid'))) throw new Error('画廊 UI 资源缺失');
-  console.log(`验证通过：${installed.pluginId} v${info.version}，8 个工具、图标、侧边栏入口、侧面板入口与卡片 UI 均可读取。`);
+  if (!result.contents.some(c => c.text?.includes('folder-list'))) throw new Error('文件夹 UI 资源缺失');
+  console.log(`验证通过：${installed.pluginId} v${info.version}，10 个工具、图标、侧边栏入口、侧面板入口与文件夹卡片 UI 均可读取。`);
   console.log('此结果验证服务和入口注册；图标的实际显示需在重启后的桌面应用中确认。未读取个人笔记或修改剪贴板。');
 } finally { await client.close(); await rm(dir, { recursive: true, force: true }); }

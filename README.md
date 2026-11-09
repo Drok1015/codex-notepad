@@ -16,11 +16,13 @@
 
 **安装 agent：请完整阅读本文，并按下方「Agent 安装协议」操作。不要复制他人电脑上的 MCP 配置。**
 
-仓库：[Drok1015/codex-notepad](https://github.com/Drok1015/codex-notepad) · 许可证：[MIT](LICENSE) · 当前版本：`0.3.0`
+仓库：[Drok1015/codex-notepad](https://github.com/Drok1015/codex-notepad) · 许可证：[MIT](LICENSE) · 当前版本：`0.4.0`
 
 ## 功能
 
 - 卡片画廊，点击卡片复制完整笔记正文，保留 Markdown、Unicode 和换行，不含独立标题字段。
+- 左侧支持新建文件夹、按文件夹筛选以及「未分类」。卡片和编辑器中的文件夹下拉框可移动笔记；在文件夹下新建笔记会自动归入该文件夹。
+- 卡片底部可直接「移入回收站」，不会触发复制；从回收站恢复时保留原文件夹。
 - 标题与正文搜索、置顶、新建、编辑、650 毫秒自动保存。
 - Markdown 安全预览、单篇 Markdown 导出。
 - 回收站及恢复，无永久删除功能。
@@ -81,7 +83,7 @@ npm run install:plugin
 npm run verify:plugin
 ```
 
-4. **核对结果。** 以上命令应全部退出码为 0。安装器将本机状态写入 `.local/install.json`，其 `pluginId` 应为 `local-notepad@codex-notepad`，`version` 应与 `package.json` 一致。`verify:plugin` 必须显示「验证通过」，它会从实际缓存目录的 `.mcp.json` 原样启动服务，核对版本、8 个工具、图标、两个入口及画廊 UI。
+4. **核对结果。** 以上命令应全部退出码为 0。安装器将本机状态写入 `.local/install.json`，其 `pluginId` 应为 `local-notepad@codex-notepad`，`version` 应与 `package.json` 一致。`verify:plugin` 必须显示「验证通过」，它会从实际缓存目录的 `.mcp.json` 原样启动服务，核对版本、10 个工具、图标、两个入口及文件夹画廊 UI。
 5. **核对界面。** 请用户完全退出并重新打开桌面应用。只有实际观察到「记事本」入口与卡片画廊，才能报告界面验证通过。如果工具不能访问应用界面，明确写「服务验证通过；界面待用户确认」，不要将预览网页或工具列表当成侧边栏显示的证据。不要自动结束用户正在进行的聊天或强制退出应用。
 6. **报告。** 提供安装版本、插件 ID、测试和握手结果、是否验证实际界面，以及下一步。任何阶段失败都先定位该阶段，不能跳过失败继续声称安装完成。
 
@@ -105,6 +107,8 @@ bash scripts/install.sh
 ```
 
 重启桌面应用后生效。更新不会删除笔记。更换机器、移除所用 Node 版本，或移动用于插件源的源码目录后，应重新执行安装器。若提示同名 marketplace 已来自旧目录，先检查 `codex plugin marketplace list`；只有确认旧目录属于本插件后，才移除该源并在新目录重新安装。
+
+0.4.0 会自动为旧数据库添加文件夹表和笔记的 `folder_id` 列。原笔记默认归入「未分类」，保留正文、ID、置顶、时间、版本及回收站状态。文件夹为单层分类，当前提供新建与移动，不提供重命名、删除或嵌套。
 
 卸载本插件：
 
@@ -157,12 +161,14 @@ NOTEPAD_DATA_DIR=/tmp/codex-notepad-demo npm start
 | 路径 | 职责 |
 | --- | --- |
 | `server/store.mjs` | SQLite 持久化、版本检查和回收站 |
-| `server/index.mjs`、`server/tools.mjs` | MCP 服务、UI 资源和 8 个工具 |
+| `server/index.mjs`、`server/tools.mjs` | MCP 服务、UI 资源和 10 个工具 |
 | `server/clipboard.mjs` | macOS UTF-8 剪贴板写入 |
 | `web/` | 画廊、编辑器和经过 DOMPurify 处理的 Markdown 预览 |
 | `scripts/install.sh`、`scripts/install.mjs` | 依赖、构建、测试、路径探测和安装 |
 | `scripts/verify.mjs` | 实际缓存包的握手与入口验证 |
 | `tests/` | 存储、冲突、UI、复制和含中文空格目录的安装测试 |
+
+文件夹工具：`list_folders` 返回文件夹和有效笔记数量，`create_folder` 新建文件夹。`list_notes` 的 `folderId` 省略时查询所有分类、传 `null` 查询未分类、传 UUID 查询指定文件夹；搜索词与分类同时生效。`create_note` 可传 `folderId`，`update_note` 使用最新 `version` 更新 `folderId`（`null` 移回未分类）。移动与删除均执行版本冲突检查。
 
 维护要求：修改安装、工具契约、功能或最低版本时，同步更新本 README、`AGENTS.md` 和测试。版本发布时同步 `package.json`、锁文件、插件 manifest、MCP serverInfo、前端 App 版本与本 README；UI 发生不兼容变更时升级资源 URI。CI 在 macOS 和 Linux 上构建测试；Linux 跳过 macOS 安装集成测试。
 

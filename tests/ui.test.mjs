@@ -87,6 +87,76 @@ test('复制失败不显示成功，卡片可再次点击重试', async () => {
   } finally { s.close(); }
 });
 
+test('新建文件夹、归类、筛选、在文件夹中新建笔记及重复名称提示', async () => {
+  const s = setup(); const { $, store, window } = s;
+  try {
+    const note = store.create({ title: '待整理', content: '不能丢失的正文' });
+    await until(() => $('gallery-grid').children.length === 1);
+    $('new-folder').click(); assert.equal($('folder-form').hidden, false);
+    $('folder-name').value = '工作';
+    $('folder-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await until(() => store.listFolders().folders.length === 1 && !$('new-note').disabled);
+    const folder = store.listFolders().folders[0];
+    assert.equal($('gallery-title').textContent, '工作');
+    assert.equal($('gallery-grid').children.length, 0);
+    $('active-filter').click(); await until(() => $('gallery-grid').children.length === 1 && !$('new-note').disabled);
+    const select = $('gallery-grid').querySelector('select'); select.value = folder.id;
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await until(() => store.get(note.id).folderId === folder.id && !$('new-note').disabled);
+    assert.equal(s.copies.length, 0);
+    $('folder-list').querySelector('[aria-label="文件夹：未分类"]').click();
+    await until(() => $('gallery-title').textContent === '未分类' && !$('new-note').disabled);
+    assert.equal($('gallery-grid').children.length, 0);
+    $('folder-list').querySelector('[aria-label="文件夹：工作"]').click();
+    await until(() => $('gallery-grid').children.length === 1 && !$('new-note').disabled);
+    $('new-note').click(); await until(() => !$('editor').hidden && !$('new-note').disabled);
+    const added = store.list().find(n => n.id !== note.id); assert.equal(added.folderId, folder.id);
+    $('new-folder').click(); $('folder-name').value = '工作';
+    $('folder-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await until(() => !$('folder-error').hidden && !$('new-note').disabled);
+    assert.match($('folder-error').textContent, /同名/);
+    assert.equal(store.listFolders().folders.length, 1);
+    assert.equal(store.get(note.id).content, '不能丢失的正文');
+  } finally { s.close(); }
+});
+
+test('卡片回收站按钮不会触发复制，恢复后保留原文件夹', async () => {
+  const s = setup(); const { $, store } = s;
+  try {
+    const folder = store.createFolder({ name: '工作' });
+    const note = store.create({ title: '卡片删除', content: '保留的内容', folderId: folder.id });
+    await until(() => $('gallery-grid').children.length === 1);
+    $('gallery-grid').querySelector('.gallery-trash').click();
+    await until(() => !!store.get(note.id).deletedAt && !$('new-note').disabled);
+    assert.equal(s.copies.length, 0);
+    assert.equal($('gallery-grid').children.length, 0);
+    assert.match($('copy-toast').textContent, /移入回收站/);
+    $('trash-filter').click(); await until(() => $('note-list').querySelector('.note-card') && !$('new-note').disabled);
+    $('note-list').querySelector('.note-card').click(); await until(() => !$('restore-note').hidden && !$('new-note').disabled);
+    assert.equal($('note-folder').disabled, true);
+    $('restore-note').click(); await until(() => !store.get(note.id).deletedAt && !$('new-note').disabled);
+    assert.equal(store.get(note.id).folderId, folder.id);
+    assert.equal(store.get(note.id).content, '保留的内容');
+  } finally { s.close(); }
+});
+
+test('编辑器移动文件夹前保存草稿，归类与内容同时保留', async () => {
+  const s = setup(); const { $, store, edit, window } = s;
+  try {
+    const folder = store.createFolder({ name: '灵感' });
+    const note = store.create({ title: '原笔记', content: '原始内容' });
+    await until(() => $('gallery-grid').children.length === 1);
+    $('gallery-grid').querySelector('.gallery-edit').click();
+    await until(() => !$('editor').hidden && !$('new-note').disabled);
+    edit('note-content', '尚未自动保存的修改');
+    $('note-folder').value = folder.id; $('note-folder').dispatchEvent(new window.Event('change', { bubbles: true }));
+    await until(() => store.get(note.id).folderId === folder.id && !$('new-note').disabled);
+    assert.equal(store.get(note.id).content, '尚未自动保存的修改');
+    assert.equal($('note-folder').value, folder.id);
+    assert.equal($('error-banner').hidden, true);
+  } finally { s.close(); }
+});
+
 test('界面新建、自动保存、安全预览、搜索、回收与恢复', async () => {
   const s = setup(); const { $, edit, store } = s;
   try {
