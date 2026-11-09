@@ -2,6 +2,14 @@
 
 一个开源的 Codex 桌面端记事本插件：以卡片浏览笔记，点击卡片复制完整正文，点击「编辑」继续记录。数据保存在自己的电脑上，无需自建服务器。
 
+![卡片画廊：浏览笔记，点击卡片复制完整正文](docs/images/gallery.png)
+
+| Markdown 编辑器 | Markdown 预览 |
+| --- | --- |
+| ![Markdown 编辑器：记录、编辑与自动保存](docs/images/editor.png) | ![Markdown 预览：标题、清单、表格与引用](docs/images/markdown-preview.png) |
+
+*截图均使用专门创建的演示笔记。*
+
 **安装 agent：请完整阅读本文，并按下方「Agent 安装协议」操作。不要复制他人电脑上的 MCP 配置。**
 
 仓库：[Drok1015/codex-notepad](https://github.com/Drok1015/codex-notepad) · 许可证：[MIT](LICENSE) · 当前版本：`0.3.0`
