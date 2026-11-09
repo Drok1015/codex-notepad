@@ -17,6 +17,17 @@ export function noteTools(store, { clipboard = writeClipboard } = {}) {
       title: '新建文件夹', description: '按用户要求创建本地笔记文件夹，名称不可为空或重复。',
       schema: z.object({ name: z.string().trim().min(1).max(80) }), run: args => ({ folder: store.createFolder(args) }),
     },
+    rename_folder: {
+      title: '重命名文件夹', description: '按用户要求重命名文件夹。expectedName 使用 list_folders 返回的当前名称，避免覆盖其他窗口的改名。',
+      schema: z.object({ id: z.string().uuid(), expectedName: z.string().min(1).max(80), name: z.string().trim().min(1).max(80) }),
+      run: args => ({ folder: store.renameFolder(args) }),
+    },
+    delete_folder: {
+      destructive: true,
+      title: '删除文件夹', description: '删除文件夹并将其中所有笔记移至未分类，保留正文及回收站状态。先以 confirmed=false 调用；如果返回 requiresConfirmation=true，必须向用户说明笔记数量并等待明确确认，再以 confirmed=true、返回的 noteCount 作为 expectedNoteCount、当前名称作为 expectedName 调用。数量变更会要求重新确认。',
+      schema: z.object({ id: z.string().uuid(), expectedName: z.string().min(1).max(80), confirmed: z.boolean().default(false), expectedNoteCount: z.number().int().nonnegative().optional() }),
+      run: args => store.deleteFolder(args),
+    },
     copy_note: {
       title: '复制笔记正文', description: '将指定笔记的完整正文复制到本机剪贴板，保留原始 Markdown 与换行，不包含标题。仅在用户要求复制笔记时调用。',
       schema: z.object({ id }),

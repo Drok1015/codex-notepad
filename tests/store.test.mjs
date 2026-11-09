@@ -127,3 +127,64 @@ test('文件夹分类、未分类、数量统计、移动与回收站恢复', ()
     assert.equal(store.listFolders().totalCount, 2);
   } finally { store.close(); }
 });
+
+test('文件夹改名校验重名和并发名称，不改动笔记本身', () => {
+  const store = new NoteStore(':memory:');
+  try {
+    const a = store.createFolder({ name: '工作' }); store.createFolder({ name: '灵感' });
+    const note = store.create({ title: '原笔记', content: '保留内容', folderId: a.id });
+    const renamed = store.renameFolder({ id: a.id, expectedName: '工作', name: '  项目资料  ' });
+    assert.equal(renamed.name, '项目资料');
+    assert.deepEqual(store.get(note.id), note);
+    assert.throws(() => store.renameFolder({ id: a.id, expectedName: '工作', name: '其他' }), error => error.code === 'FOLDER_CONFLICT');
+    assert.throws(() => store.renameFolder({ id: a.id, expectedName: '项目资料', name: '灵感' }), error => error.code === 'DUPLICATE_FOLDER');
+    assert.throws(() => store.renameFolder({ id: a.id, expectedName: '项目资料', name: '未分类' }), /默认分类/);
+    assert.throws(() => store.deleteFolder({ id: a.id, expectedName: '工作' }), error => error.code === 'FOLDER_CONFLICT');
+    assert.equal(store.listFolders().folders.length, 2);
+  } finally { store.close(); }
+});
+
+test('非空文件夹删除需确认最新数量，保留正文、日期、置顶与回收站状态', () => {
+  const store = new NoteStore(':memory:');
+  try {
+    const folder = store.createFolder({ name: '工作' });
+    const a = store.create({ title: '正文 A', content: 'Markdown **A**', folderId: folder.id });
+    const b = store.create({ title: '正文 B', content: '正文 B', folderId: folder.id });
+    const trashed = store.update({ id: b.id, version: b.version, deleted: true });
+    const request = { id: folder.id, expectedName: folder.name };
+    const pending = store.deleteFolder(request);
+    assert.equal(pending.requiresConfirmation, true); assert.equal(pending.noteCount, 2);
+    assert.deepEqual(store.get(a.id), a);
+    assert.equal(store.listFolders().folders[0].totalNoteCount, 2);
+    const added = store.create({ title: '确认期间新增', folderId: folder.id });
+    const changed = store.deleteFolder({ ...request, confirmed: true, expectedNoteCount: 2 });
+    assert.equal(changed.requiresConfirmation, true); assert.equal(changed.noteCount, 3);
+    assert.equal(store.get(a.id).folderId, folder.id);
+    const result = store.deleteFolder({ ...request, confirmed: true, expectedNoteCount: 3 });
+    assert.equal(result.deleted, true); assert.equal(result.movedNoteCount, 3);
+    assert.equal(store.listFolders().folders.length, 0);
+    for (const before of [a, trashed, added]) {
+      const after = store.get(before.id);
+      assert.deepEqual(after, { ...before, folderId: null, version: before.version + 1 });
+    }
+    assert.throws(() => store.update({ id: a.id, version: a.version, content: '旧草稿' }), error => error.code === 'CONFLICT');
+    const restored = store.update({ id: trashed.id, version: trashed.version + 1, deleted: false });
+    assert.equal(restored.folderId, null); assert.equal(restored.content, trashed.content);
+    assert.equal(store.list().length, 3);
+  } finally { store.close(); }
+});
+
+test('空文件夹直接删除，只有回收站笔记的文件夹仍需确认', () => {
+  const store = new NoteStore(':memory:');
+  try {
+    const empty = store.createFolder({ name: '空文件夹' });
+    assert.equal(store.deleteFolder({ id: empty.id, expectedName: empty.name }).deleted, true);
+    const folder = store.createFolder({ name: '已归档' });
+    const note = store.create({ folderId: folder.id });
+    store.update({ id: note.id, version: note.version, deleted: true });
+    assert.equal(store.listFolders().folders[0].noteCount, 0);
+    const result = store.deleteFolder({ id: folder.id, expectedName: folder.name });
+    assert.equal(result.requiresConfirmation, true); assert.equal(result.noteCount, 1);
+    assert.equal(store.get(note.id).folderId, folder.id);
+  } finally { store.close(); }
+});

@@ -8,10 +8,10 @@ import { noteTools } from './tools.mjs';
 
 const icon = readFileSync(new URL('../assets/icon.svg', import.meta.url), 'utf8');
 const icons = [{ src: `data:image/svg+xml;base64,${Buffer.from(icon).toString('base64')}`, mimeType: 'image/svg+xml', sizes: ['any'] }];
-const server = new McpServer({ name: '记事本', version: '0.4.0', icons });
+const server = new McpServer({ name: '记事本', version: '0.5.0', icons });
 new OpenAIExtensions(server);
 const store = new NoteStore();
-const uri = 'ui://local-notepad/v3';
+const uri = 'ui://local-notepad/v4';
 registerAppResource(server, '记事本', uri, {}, async () => ({ contents: [{
   uri, mimeType: RESOURCE_MIME_TYPE,
   text: readFileSync(new URL('./app.html', import.meta.url), 'utf8'),
@@ -33,7 +33,7 @@ registerAppTool(server, 'open_notepad', {
 for (const [name, tool] of Object.entries(noteTools(store))) {
   server.registerTool(name, {
     title: tool.title, description: tool.description, inputSchema: tool.schema,
-    annotations: { readOnlyHint: !!tool.readOnly, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: !!tool.readOnly, destructiveHint: !!tool.destructive, openWorldHint: false },
     _meta: { ui: { visibility: ['model', 'app'] } },
   }, async (args) => {
     try {

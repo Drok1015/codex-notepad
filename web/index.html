@@ -41,5 +41,12 @@
   </main>
 </div>
 <div id="copy-toast" class="copy-toast" role="status" aria-live="polite" hidden></div>
+<dialog id="delete-folder-dialog" class="folder-delete-dialog" aria-labelledby="delete-folder-title" aria-describedby="delete-folder-message delete-folder-help">
+  <h2 id="delete-folder-title">删除文件夹？</h2>
+  <p id="delete-folder-message"></p>
+  <p id="delete-folder-help">其中的笔记会移到「未分类」，正文和回收站状态都会保留。</p>
+  <p id="delete-folder-error" role="alert" hidden></p>
+  <div><button id="cancel-folder-delete" autofocus>取消</button><button id="confirm-folder-delete">确认删除文件夹</button></div>
+</dialog>
 <script type="module">/* APP_SCRIPT */</script>
 </body></html>

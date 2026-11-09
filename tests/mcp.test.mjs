@@ -30,6 +30,11 @@ test('打包后的 MCP 可启动并发布侧边栏入口和全部笔记工具', 
     assert.equal(created.isError, undefined);
     const { id, version } = created.structuredContent.note;
     assert.equal(created.structuredContent.note.folderId, folderId);
+    const renamed = await client.callTool({ name: 'rename_folder', arguments: { id: folderId, expectedName: '工作', name: '项目资料' } });
+    assert.equal(renamed.structuredContent.folder.name, '项目资料');
+    const pending = await client.callTool({ name: 'delete_folder', arguments: { id: folderId, expectedName: '项目资料' } });
+    assert.equal(pending.structuredContent.requiresConfirmation, true);
+    assert.equal(pending.structuredContent.noteCount, 1);
     const folders = await client.callTool({ name: 'list_folders', arguments: {} });
     assert.equal(folders.structuredContent.folders[0].noteCount, 1);
     const filtered = await client.callTool({ name: 'list_notes', arguments: { folderId } });
@@ -37,6 +42,8 @@ test('打包后的 MCP 可启动并发布侧边栏入口和全部笔记工具', 
     const updated = await client.callTool({ name: 'update_note', arguments: { id, version, content: '新内容', folderId: null } });
     assert.equal(updated.structuredContent.note.content, '新内容');
     assert.equal(updated.structuredContent.note.folderId, null);
+    const deletedFolder = await client.callTool({ name: 'delete_folder', arguments: { id: folderId, expectedName: '项目资料' } });
+    assert.equal(deletedFolder.structuredContent.deleted, true);
     const conflict = await client.callTool({ name: 'update_note', arguments: { id, version, content: '过时内容' } });
     assert.equal(conflict.isError, true);
     assert.equal(conflict.structuredContent.error.code, 'CONFLICT');
@@ -44,5 +51,13 @@ test('打包后的 MCP 可启动并发布侧边栏入口和全部笔记工具', 
     assert.ok(trashed.structuredContent.note.deletedAt);
     const restored = await client.callTool({ name: 'restore_note', arguments: { id, version: 3 } });
     assert.equal(restored.structuredContent.note.deletedAt, null);
+    const second = await client.callTool({ name: 'create_folder', arguments: { name: '归档' } });
+    const secondId = second.structuredContent.folder.id;
+    await client.callTool({ name: 'update_note', arguments: { id, version: 4, folderId: secondId } });
+    const confirmed = await client.callTool({ name: 'delete_folder', arguments: { id: secondId, expectedName: '归档', confirmed: true, expectedNoteCount: 1 } });
+    assert.equal(confirmed.structuredContent.deleted, true);
+    const preserved = await client.callTool({ name: 'get_note', arguments: { id } });
+    assert.equal(preserved.structuredContent.note.content, '新内容');
+    assert.equal(preserved.structuredContent.note.folderId, null);
   } finally { await client.close(); rmSync(dir, { recursive: true, force: true }); }
 });

@@ -4,7 +4,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
 const $ = id => document.getElementById(id);
-const state = { notes: [], current: null, dirty: false, saving: null, timer: null, trash: false, preview: false, busy: false, error: null, listGeneration: 0, gallery: true, copying: null, folders: [], folderId: undefined, unfiledCount: 0 };
+const state = { notes: [], current: null, dirty: false, saving: null, timer: null, trash: false, preview: false, busy: false, error: null, listGeneration: 0, gallery: true, copying: null, folders: [], folderId: undefined, unfiledCount: 0, renamingFolder: null, pendingDelete: null };
 let app, call;
 const date = value => new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(new Date(value));
 const fullDate = value => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
@@ -27,7 +27,18 @@ function renderFolders() {
     button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); button.disabled = state.busy;
     const name = document.createElement('span'); name.textContent = `▱ ${folder.name}`;
     const count = document.createElement('span'); count.className = 'folder-count'; count.textContent = folder.noteCount;
-    button.append(name, count); button.onclick = () => action(() => switchFolder(folder.id)); list.append(button);
+    button.append(name, count); button.onclick = () => action(() => switchFolder(folder.id));
+    const row = document.createElement('div'); row.className = 'folder-row'; row.append(button);
+    if (folder.id) {
+      const rename = document.createElement('button'); rename.className = 'folder-action'; rename.textContent = '✎'; rename.title = '重命名';
+      rename.setAttribute('aria-label', `重命名文件夹：${folder.name}`); rename.disabled = state.busy;
+      rename.onclick = () => openFolderForm(folder);
+      const remove = document.createElement('button'); remove.className = 'folder-action folder-remove'; remove.textContent = '×'; remove.title = '删除文件夹';
+      remove.setAttribute('aria-label', `删除文件夹：${folder.name}`); remove.disabled = state.busy;
+      remove.onclick = () => action(() => requestFolderDelete(folder));
+      row.append(rename, remove);
+    }
+    list.append(row);
   }
   fillFolderSelect($('note-folder'), state.current?.folderId);
   $('note-folder').disabled = state.busy || !state.current || !!state.current.deletedAt;
@@ -51,6 +62,53 @@ async function moveNote(note, folderId) {
 async function trashCard(note) {
   await tool('trash_note', { id: note.id, version: note.version });
   await refresh(); showToast('已移入回收站 · 可随时恢复');
+}
+
+function openFolderForm(folder = null) {
+  state.renamingFolder = folder;
+  $('folder-form').hidden = false; $('new-folder').setAttribute('aria-expanded', 'true');
+  $('folder-name').value = folder?.name || ''; $('create-folder').textContent = folder ? '保存名称' : '创建';
+  $('folder-error').hidden = true; $('folder-name').focus();
+  if (folder) $('folder-name').select();
+}
+
+function closeFolderForm() {
+  state.renamingFolder = null; $('folder-form').hidden = true; $('new-folder').setAttribute('aria-expanded', 'false'); $('folder-name').value = '';
+}
+
+function openDeleteDialog(result, changed = false) {
+  state.pendingDelete = result;
+  $('delete-folder-message').textContent = `${changed ? '文件夹中的笔记数量已变化，请重新确认。' : ''}「${result.folder.name}」中有 ${result.noteCount} 篇笔记（含回收站），确定删除此文件夹？`;
+  $('delete-folder-error').hidden = true;
+  const dialog = $('delete-folder-dialog');
+  if (!dialog.open) {
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+    $('cancel-folder-delete').focus();
+  }
+}
+
+function closeDeleteDialog() {
+  const dialog = $('delete-folder-dialog');
+  if (typeof dialog.close === 'function') dialog.close(); else dialog.removeAttribute('open');
+  state.pendingDelete = null; $('new-folder').focus();
+}
+
+async function finishFolderDelete(result) {
+  if (state.folderId === result.folder.id) state.folderId = null;
+  if (state.renamingFolder?.id === result.folder.id) closeFolderForm();
+  // The editor was saved before the operation. Reload its updated version, including a trashed note.
+  if (state.current?.folderId === result.folder.id) {
+    const { note } = await tool('get_note', { id: state.current.id });
+    state.current = note; renderEditor(note);
+  }
+  renderFilters(); await refresh();
+  showToast(result.movedNoteCount ? `已删除文件夹，${result.movedNoteCount} 篇笔记已移至未分类` : '已删除空文件夹');
+}
+
+async function requestFolderDelete(folder) {
+  await save();
+  const result = await tool('delete_folder', { id: folder.id, expectedName: folder.name, confirmed: false });
+  if (result.requiresConfirmation) openDeleteDialog(result); else await finishFolderDelete(result);
 }
 
 function setStatus(message, error = false) { $('save-status').textContent = message; $('save-status').classList.toggle('error', error); }
@@ -165,7 +223,11 @@ async function refresh() {
   if (state.folderId !== undefined && !state.trash) args.folderId = state.folderId;
   const [result, folderData] = await Promise.all([tool('list_notes', args), tool('list_folders')]);
   if (generation !== state.listGeneration) return;
-  state.notes = result.notes; state.folders = folderData.folders; state.unfiledCount = folderData.unfiledCount; renderList();
+  state.folders = folderData.folders; state.unfiledCount = folderData.unfiledCount;
+  if (typeof state.folderId === 'string' && !state.folders.some(folder => folder.id === state.folderId)) {
+    state.folderId = null; renderFilters(); return refresh();
+  }
+  state.notes = result.notes; renderList();
 }
 
 function renderPreview() {
@@ -294,24 +356,39 @@ $('gallery-create').onclick = () => action(newNote);
 $('gallery-toggle').onclick = () => action(() => switchFolder(state.folderId));
 $('active-filter').onclick = () => action(() => switchFilter(false));
 $('trash-filter').onclick = () => action(() => switchFilter(true));
-$('new-folder').onclick = () => {
-  $('folder-form').hidden = !$('folder-form').hidden;
-  $('new-folder').setAttribute('aria-expanded', String(!$('folder-form').hidden));
-  $('folder-error').hidden = true;
-  if (!$('folder-form').hidden) $('folder-name').focus();
-};
-$('cancel-folder').onclick = () => { $('folder-form').hidden = true; $('new-folder').setAttribute('aria-expanded', 'false'); $('folder-name').value = ''; };
+$('new-folder').onclick = () => { if (!$('folder-form').hidden && !state.renamingFolder) closeFolderForm(); else openFolderForm(); };
+$('cancel-folder').onclick = closeFolderForm;
 $('folder-form').onsubmit = event => {
   event.preventDefault();
   action(async () => {
     try {
       await save();
-      const { folder } = await tool('create_folder', { name: $('folder-name').value });
-      $('folder-name').value = ''; $('folder-form').hidden = true; $('new-folder').setAttribute('aria-expanded', 'false');
-      await switchFolder(folder.id); showToast(`已创建文件夹「${folder.name}」`);
+      const renaming = state.renamingFolder;
+      const { folder } = await tool(renaming ? 'rename_folder' : 'create_folder', {
+        name: $('folder-name').value, ...(renaming ? { id: renaming.id, expectedName: renaming.name } : {}),
+      });
+      closeFolderForm();
+      if (renaming) await refresh(); else await switchFolder(folder.id);
+      showToast(`已${renaming ? '重命名' : '创建'}文件夹「${folder.name}」`);
     } catch (error) { $('folder-error').textContent = error.message; $('folder-error').hidden = false; }
   });
 };
+$('cancel-folder-delete').onclick = () => { if (!$('confirm-folder-delete').disabled) closeDeleteDialog(); };
+$('delete-folder-dialog').addEventListener('cancel', event => { event.preventDefault(); if (!$('confirm-folder-delete').disabled) closeDeleteDialog(); });
+$('confirm-folder-delete').onclick = () => action(async () => {
+  const pending = state.pendingDelete;
+  if (!pending) return;
+  $('confirm-folder-delete').disabled = true; $('cancel-folder-delete').disabled = true;
+  try {
+    // A draft may have changed since opening the dialog.
+    await save();
+    const result = await tool('delete_folder', { id: pending.folder.id, expectedName: pending.folder.name, confirmed: true, expectedNoteCount: pending.noteCount });
+    if (result.requiresConfirmation) openDeleteDialog(result, true);
+    else { closeDeleteDialog(); await finishFolderDelete(result); }
+  } catch (error) {
+    $('delete-folder-error').textContent = error.message; $('delete-folder-error').hidden = false;
+  } finally { $('confirm-folder-delete').disabled = false; $('cancel-folder-delete').disabled = false; }
+});
 $('note-folder').onchange = () => { const value = $('note-folder').value || null; action(() => moveNote(state.current, value)); };
 $('note-title').oninput = $('note-content').oninput = onEdit;
 $('preview-toggle').onclick = () => { state.preview = !state.preview; updatePreview(); };
@@ -343,6 +420,7 @@ $('save-copy').onclick = () => action(async () => {
 });
 window.addEventListener('beforeunload', event => { if (state.dirty || state.saving) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('keydown', event => {
+  if ($('delete-folder-dialog').open) return;
   if (!(event.metaKey || event.ctrlKey)) return;
   if (event.key.toLowerCase() === 's') { event.preventDefault(); action(save); }
   if (event.key.toLowerCase() === 'k') { event.preventDefault(); $('search').focus(); }
@@ -359,7 +437,7 @@ async function start() {
     };
     await refresh(); setStatus('✓ 笔记保存在本机');
   } else {
-    app = new App({ name: '记事本', version: '0.4.0' });
+    app = new App({ name: '记事本', version: '0.5.0' });
     new OpenAIExtensions(app);
     call = (name, args) => app.callServerTool({ name, arguments: args });
     app.ontoolresult = result => {
